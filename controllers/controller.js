@@ -1,5 +1,6 @@
 const redis = require("../services/redis");
 const validatePlan = require("../utils/validator");
+const mergeLinkedPlanServices = require('../utils/mergeLinkedPlanServices');
 const { v4: uuidv4 } = require('uuid');
 
 exports.createPlan = async (req, res) => {
@@ -31,4 +32,47 @@ exports.getPlan = async (req, res) => {
 exports.deletePlan = async (req, res) => {
     await redis.delete(req.params.id);
     res.status(204).end();
+};
+
+exports.patchPlan = async (req, res) => {
+    const id = req.params.id;
+    const newData = req.body;
+
+    try {
+        // Validate the merged object
+        const { valid, errors } = validatePlan(req.body);
+        if (!valid) return res.status(400).json({ errors });
+
+        const existing = await redis.get(id);
+        if (!existing) {
+            return res.status(404).json({ message: "Plan not found" });
+        }
+
+        // Deep merge only linkedPlanServices, replace everything else
+        const merged = {
+            ...newData,
+            linkedPlanServices: mergeLinkedPlanServices(
+                existing.linkedPlanServices || [],
+                newData.linkedPlanServices || []
+            )
+        };
+
+        // console.log("Merged object:", JSON.stringify(merged, null, 2));
+
+        const resourceEtag = etag(JSON.stringify(merged));
+
+        if (req.headers["if-none-match"] === resourceEtag) {
+        return res.status(304).end();
+        }
+
+        await redis.set(id, merged);
+
+        res.setHeader("ETag", resourceEtag);
+        res.status(200).json({
+            message: "Plan updated successfully"
+        });
+    } catch (err) {
+        console.error("Error in patchPlan:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
 };
