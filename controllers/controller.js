@@ -2,6 +2,9 @@ const redis = require("../services/redis");
 const validatePlan = require("../utils/validator");
 const mergeLinkedPlanServices = require('../utils/mergeLinkedPlanServices');
 const { v4: uuidv4 } = require('uuid');
+const etag = require('etag'); // npm install etag
+
+var resourceEtag;
 
 exports.createPlan = async (req, res) => {
     const { valid, errors } = validatePlan(req.body);
@@ -9,10 +12,14 @@ exports.createPlan = async (req, res) => {
 
     const id = req.body.objectId || uuidv4();
     await redis.set(id, req.body);
+
+    resourceEtag = etag(JSON.stringify(req.body));
+    //await redis.setETag('etag', resourceEtag);
+
+    res.setHeader("ETag", resourceEtag);
     res.status(201).json({ message: "Plan created", id });
 };
 
-const etag = require('etag'); // npm install etag
 
 exports.getPlan = async (req, res) => {
     const data = await redis.get(req.params.id);
@@ -59,14 +66,15 @@ exports.patchPlan = async (req, res) => {
 
         // console.log("Merged object:", JSON.stringify(merged, null, 2));
 
-        const resourceEtag = etag(JSON.stringify(merged));
+        //const resourceEtag =  await redis.getETag('etag')
 
-        if (req.headers["if-none-match"] === resourceEtag) {
-        return res.status(304).end();
+        if (req.headers["if-match"] !== resourceEtag) {
+        return res.status(412).end();
         }
 
         await redis.set(id, merged);
 
+        resourceEtag = etag(JSON.stringify(merged));
         res.setHeader("ETag", resourceEtag);
         res.status(200).json({
             message: "Plan updated successfully"

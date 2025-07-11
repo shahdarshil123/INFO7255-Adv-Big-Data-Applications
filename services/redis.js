@@ -15,5 +15,14 @@ module.exports = {
     },
     async delete(key) {
         await client.del(key);
-    }
+    },
+
+    async getETag(key){
+        const data = await client.get(key);
+        return data;
+    },
+
+    async setETag (key, eTag){
+        return await client.set(key, eTag);
+}
 };
