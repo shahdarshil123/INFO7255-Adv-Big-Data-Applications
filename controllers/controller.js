@@ -110,6 +110,24 @@ exports.patchPlan = async (req, res) => {
 
         await redis.set(id, merged);
 
+        try{
+            // Publish to RabbitMQ
+            await publishToQueue(merged);
+        }
+        catch(err){
+            console.error('Error in createPlan:', err);
+            res.status(500).json({ message: 'Server Error' });
+        }
+
+        try{
+            // Consume from RabbitMQ
+            await startConsumer();
+        }
+        catch(err){
+            console.error('Error in dequeue:', err);
+            res.status(500).json({ message: 'Server Error' });
+        }
+
         resourceEtag = etag(JSON.stringify(merged));
         res.setHeader("ETag", resourceEtag);
         res.status(200).json({
