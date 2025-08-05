@@ -1,10 +1,15 @@
+require('dotenv').config({ path: '.env' });
 const express = require('express');
 const app = express();
 const planRoutes = require('./routes/routes');
+const {client, createPlanIndex} = require('./services/elasticsearch.js');
 
 // Middleware to parse JSON bodies
 app.use(express.json());
 app.use('/v1/plan', planRoutes);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+(async () => {
+    await createPlanIndex(); // ✅ Create index if not exists
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+})();

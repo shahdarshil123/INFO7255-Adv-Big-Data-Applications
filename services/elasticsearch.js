@@ -1,5 +1,5 @@
 // require('dotenv').config({ path: 'C:/Users/darsh/Desktop/Adv big data/app/.env' });
-require('dotenv').config({ path: '../.env' });
+// require('dotenv').config({ path: '../.env' });
 const { Client } = require('@elastic/elasticsearch');
 
 const ELASTIC_SEARCH_API_KEY_ID = process.env.ELASTIC_SEARCH_API_KEY_ID;
@@ -15,58 +15,45 @@ const client = new Client({
 });
 
 
-const indexName = 'plans';
+const indexName = 'indexplan';
 
 const indexSettings = {
     mappings: {
         properties: {
             objectId: { type: 'keyword' },
             objectType: { type: 'keyword' },
-            planType: { type: 'text' },
-            creationDate: { type: 'date' },
-            planCostShares: {
-                properties: {
-                    copay: { type: 'integer' },
-                    deductible: { type: 'integer' }
-                }
+            _org: { type: 'keyword' },
+            planType: { type: 'keyword' },
+            creationDate: {
+                type: 'date',
+                format: 'dd-MM-yyyy||strict_date_optional_time||epoch_millis'
             },
-            linkedPlanServices: {
-                type: 'nested',
-                properties: {
-                    objectId: { type: 'keyword' },
-                    objectType: { type: 'keyword' },
-                    linkedService: {
-                        properties: {
-                            name: { type: 'text' },
-                            objectId: { type: 'keyword' }
-                        }
-                    },
-                    planserviceCostShares: {
-                        properties: {
-                            copay: { type: 'integer' },
-                            deductible: { type: 'integer' }
-                        }
-                    }
+            plan_join: {
+                type: 'join',
+                relations: {
+                    plan: ['planCostShares', 'linkedPlanServices'],
+                    linkedPlanServices: ['linkedService', 'planserviceCostShares']
                 }
             }
         }
     }
 };
 
-async function createIndex() {
+
+async function createPlanIndex() {
     try {
         const exists = await client.indices.exists({ index: indexName });
         if (exists) {
             console.log(`Index "${indexName}" already exists.`);
             return;
         }
-        else{
+        else {
             const response = await client.indices.create({
-            index: indexName,
-            body: indexSettings
-        });
+                index: indexName,
+                body: indexSettings
+            });
 
-        console.log(`Index "${indexName}" created successfully!`);
+            console.log(`Index "${indexName}" created successfully!`);
         }
 
     } catch (error) {
@@ -74,4 +61,5 @@ async function createIndex() {
     }
 }
 
-createIndex();
+// createIndex();
+module.exports = { client, createPlanIndex };
