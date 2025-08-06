@@ -5,8 +5,11 @@ const { v4: uuidv4 } = require('uuid');
 const etag = require('etag'); // npm install etag
 const { client } = require('../services/elasticsearch');
 const { publishToQueue } = require('../services/rabbitmq');
-const {startConsumer} = require('../services/worker')
+const { startConsumer, startConsumerForDelete } = require('../services/worker')
 const amqp = require('amqplib');
+
+const queueName = 'plan_index_queue';
+const deleteQueue = 'plan_delete_queue';
 
 var resourceEtag;
 
@@ -24,21 +27,21 @@ exports.createPlan = async (req, res) => {
         // const id = req.body.objectId || uuidv4();
         await redis.set(id, plan);
         const planId = id;
-
-        try{
+        
+        try {
             // Publish to RabbitMQ
-            await publishToQueue(plan);
+            await publishToQueue(plan, queueName);
         }
-        catch(err){
+        catch (err) {
             console.error('Error in createPlan:', err);
             res.status(500).json({ message: 'Server Error' });
         }
 
-        try{
+        try {
             // Consume from RabbitMQ
             await startConsumer();
         }
-        catch(err){
+        catch (err) {
             console.error('Error in dequeue:', err);
             res.status(500).json({ message: 'Server Error' });
         }
@@ -73,8 +76,26 @@ exports.getPlan = async (req, res) => {
 };
 
 exports.deletePlan = async (req, res) => {
-    await redis.delete(req.params.id);
-    res.status(204).end();
+    // await redis.delete(req.params.id);
+    // res.status(204).end();
+    const planId = req.params.id;
+    try {
+        // Optional: delete from Redis if you're storing it
+        await redis.delete(planId);
+
+        // Publish delete command to RabbitMQ
+        await publishToQueue({
+            action: 'delete',
+            planId
+        }, deleteQueue);
+
+        await startConsumerForDelete();
+
+        res.status(204).end();
+    } catch (err) {
+        console.error('Error in deletePlan:', err);
+        res.status(500).json({ message: 'Delete failed' });
+    }
 };
 
 exports.patchPlan = async (req, res) => {
@@ -110,20 +131,20 @@ exports.patchPlan = async (req, res) => {
 
         await redis.set(id, merged);
 
-        try{
+        try {
             // Publish to RabbitMQ
-            await publishToQueue(merged);
+            await publishToQueue(merged, queueName);
         }
-        catch(err){
+        catch (err) {
             console.error('Error in createPlan:', err);
             res.status(500).json({ message: 'Server Error' });
         }
 
-        try{
+        try {
             // Consume from RabbitMQ
             await startConsumer();
         }
-        catch(err){
+        catch (err) {
             console.error('Error in dequeue:', err);
             res.status(500).json({ message: 'Server Error' });
         }

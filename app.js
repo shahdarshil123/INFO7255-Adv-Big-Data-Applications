@@ -5,13 +5,17 @@ const planRoutes = require('./routes/routes');
 const {client, createPlanIndex} = require('./services/elasticsearch.js');
 const { connectRabbitMQ } = require('./services/rabbitmq');
 
+const queueName = 'plan_index_queue';
+const deleteQueue = 'plan_delete_queue';
+
 // Middleware to parse JSON bodies
 app.use(express.json());
 app.use('/v1/plan', planRoutes);
 
 (async () => {
     await createPlanIndex(); // Create index if not exists
-    await connectRabbitMQ();
+    await connectRabbitMQ(queueName);
+    await connectRabbitMQ(deleteQueue);
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 })();

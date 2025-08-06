@@ -1,36 +1,37 @@
 const amqp = require('amqplib');
 
 let channel;
-const queueName = 'plan_index_queue';
+// const queueName = 'plan_index_queue';
+// const deleteQueue = 'plan_delete_queue';
 
-async function connectRabbitMQ() {
+async function connectRabbitMQ(queue) {
     const connection = await amqp.connect('amqp://localhost');
     channel = await connection.createChannel();
-    await channel.assertQueue(queueName);
-    console.log('Connected to RabbitMQ and queue ready');
+    await channel.assertQueue(queue);
+    console.log(`Connected to RabbitMQ and queue ${queue} ready`);
 }
 
-async function publishToQueue(data) {
+async function publishToQueue(data,queue) {
     if (!channel) throw new Error('RabbitMQ channel not initialized');
-    channel.sendToQueue(queueName, Buffer.from(JSON.stringify(data)), {
+    channel.sendToQueue(queue, Buffer.from(JSON.stringify(data)), {
         persistent: true
     });
 }
 
-async function checkAndConsumeIfNotEmpty(queueName = 'plan_index_queue') {
+async function checkAndConsumeIfNotEmpty(queue = 'plan_index_queue') {
     try {
-        const queueStatus = await channel.checkQueue(queueName);
+        const queueStatus = await channel.checkQueue(queue);
 
         if (queueStatus.messageCount === 0) {
-            console.log(`Queue "${queueName}" is empty. Nothing to consume.`);
+            console.log(`Queue "${queue}" is empty. Nothing to consume.`);
             // await channel.close();
             // await connection.close();
             return;
         }
 
-        console.log(`Queue "${queueName}" has ${queueStatus.messageCount} messages. Starting consumer...`);
+        console.log(`Queue "${queue}" has ${queueStatus.messageCount} messages. Starting consumer...`);
 
-        channel.consume(queueName, async (msg) => {
+        channel.consume(queue, async (msg) => {
             if (msg !== null) {
                 try {
                     const plan = JSON.parse(msg.content.toString());
